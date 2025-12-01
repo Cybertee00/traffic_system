@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 
 class AuthService {
   static bool _isAuthenticated = false;

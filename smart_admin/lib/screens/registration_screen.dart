@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:smart_admin/services/auth_service.dart';
 import 'package:smart_admin/utils/app_theme.dart';
+import 'package:smart_admin/services/api_service.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -18,11 +18,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _contactNumberController = TextEditingController();
   final _physicalAddressController = TextEditingController();
   final _infrNumberController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _emailController = TextEditingController();
   
   DateTime? _selectedDate;
   String? _selectedGender;
   String? _selectedNationality;
   String? _selectedRace;
+  String? _selectedStationId;
   bool _isLoading = false;
 
   final List<String> _genders = ['Male', 'Female', 'Other'];
@@ -41,6 +45,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _contactNumberController.dispose();
     _physicalAddressController.dispose();
     _infrNumberController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -65,7 +72,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (!RegExp(r'^\d{13}$').hasMatch(id)) return false;
     
     // Validate date part (YYMMDD)
-    final year = int.parse(id.substring(0, 2));
     final month = int.parse(id.substring(2, 4));
     final day = int.parse(id.substring(4, 6));
     
@@ -127,49 +133,141 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
       return;
     }
+    if (_selectedStationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a station ID'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Step 1: Validate station exists
+      final stationId = int.parse(_selectedStationId!);
+      final isStationValid = await ApiService.validateStation(stationId);
+      
+      if (!isStationValid) {
+        throw Exception('Selected station does not exist');
+      }
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+      // Step 2: Create user account
+      final userResult = await ApiService.createUser(
+        username: _usernameController.text,
+        password: _passwordController.text,
+        email: _emailController.text,
+        role: 'instructor',
+        isActive: true,
+      );
 
-      // Show OTP dialog
-      _showOTPDialog();
+      if (!userResult['success']) {
+        throw Exception(userResult['message']);
+      }
+
+      // Get the actual user ID from the created user
+      final actualUserId = userResult['user_id'];
+      print('Extracted user ID: $actualUserId');
+      print('User result: $userResult');
+      print('User ID type: ${actualUserId.runtimeType}');
+      print('User ID value: $actualUserId');
+
+      // Step 3: Create user profile FIRST
+      print('About to create user profile with user ID: $actualUserId');
+      final dateOfBirth = '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
+      print('Date of birth: $dateOfBirth');
+      
+      final userProfileResult = await ApiService.createUserProfile(
+        userId: actualUserId,
+        name: _nameController.text,
+        surname: _surnameController.text,
+        dateOfBirth: dateOfBirth,
+        gender: _selectedGender!,
+        nationality: _selectedNationality!,
+        idNumber: _idNumberController.text,
+        contactNumber: _contactNumberController.text,
+        physicalAddress: _physicalAddressController.text,
+        race: _selectedRace!,
+      );
+
+      print('User profile result: $userProfileResult');
+      if (!userProfileResult['success']) {
+        throw Exception(userProfileResult['message']);
+      }
+
+      // Step 4: Create instructor profile AFTER user profile exists
+      print('About to create instructor profile with user ID: $actualUserId');
+      print('Station ID: $stationId');
+      print('INF Number: ${_infrNumberController.text}');
+      final instructorResult = await ApiService.createInstructorProfile(
+        userId: actualUserId,
+        infNr: _infrNumberController.text,
+        stationId: stationId,
+      );
+
+      print('Instructor profile result: $instructorResult');
+      if (!instructorResult['success']) {
+        throw Exception(instructorResult['message']);
+      }
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        // Show success dialog
+        _showSuccessDialog();
+      }
+    } catch (e) {
+      print('Exception caught in _handleSubmit: $e');
+      print('Exception type: ${e.runtimeType}');
+      if (e is Exception) {
+        print('Exception message: ${e.toString()}');
+      }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Registration failed: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
     }
   }
 
-  void _showOTPDialog() {
+  void _showSuccessDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('OTP Sent'),
+        title: const Text('Registration Successful'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
-              Icons.phone_android,
+              Icons.check_circle,
               size: 48,
               color: AppTheme.successColor,
             ),
             const SizedBox(height: 16),
             const Text(
-              'An OTP has been sent to your phone number. This will be your initial password.',
+              'Instructor has been registered successfully!',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             const Text(
-              'Please change your password on first login.',
+              'The instructor can now log in using their username and password.',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: AppTheme.warningColor,
+                color: AppTheme.primaryColor,
               ),
               textAlign: TextAlign.center,
             ),
@@ -197,60 +295,102 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Register Instructor'),
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.arrow_back),
+          ),
           onPressed: () => Navigator.pop(context),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.person_add, size: 24),
+            SizedBox(width: 12),
+            Text('Register Instructor'),
+          ],
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // Header Card
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppTheme.primaryColor, AppTheme.secondaryColor],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
-                child: Column(
+                child: Row(
                   children: [
-                    const Icon(
-                      Icons.person_add,
-                      size: 48,
-                      color: AppTheme.primaryColor,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Instructor Registration',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.person_add,
+                        size: 32,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Register a new instructor for the SMART system',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Instructor Registration',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Register a new instructor for the SMART system',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                       ),
-                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
 
               // Personal Information
-              _buildSectionTitle('Personal Information'),
-              const SizedBox(height: 16),
+              _buildSectionCard(
+                title: 'Personal Information',
+                icon: Icons.person,
+                children: [
 
               Row(
                 children: [
@@ -324,7 +464,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedGender,
+                      initialValue: _selectedGender,
                       decoration: const InputDecoration(
                         labelText: 'Gender *',
                         prefixIcon: Icon(Icons.person_outline),
@@ -351,7 +491,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedNationality,
+                      initialValue: _selectedNationality,
                       decoration: const InputDecoration(
                         labelText: 'Nationality *',
                         prefixIcon: Icon(Icons.flag),
@@ -381,7 +521,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
               // Race
               DropdownButtonFormField<String>(
-                value: _selectedRace,
+                initialValue: _selectedRace,
                 decoration: const InputDecoration(
                   labelText: 'Race *',
                   prefixIcon: Icon(Icons.people),
@@ -404,11 +544,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
+              ]),
+              const SizedBox(height: 4),
 
               // Contact Information
-              _buildSectionTitle('Contact Information'),
-              const SizedBox(height: 16),
+              _buildSectionCard(
+                title: 'Contact Information',
+                icon: Icons.contact_mail,
+                children: [
 
               // ID Number
               TextFormField(
@@ -489,15 +632,126 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
 
-              // Submit Button
-              SizedBox(
+              // Station ID
+              DropdownButtonFormField<String>(
+                 initialValue: _selectedStationId,
+                 decoration: const InputDecoration(
+                   labelText: 'Station ID *',
+                   hintText: 'Select station ID',
+                   prefixIcon: Icon(Icons.business),
+                 ),
+                 items: List.generate(51, (index) {
+                   if (index == 0) {
+                     return const DropdownMenuItem(
+                       value: null,
+                       child: Text('Select a station ID'),
+                     );
+                   }
+                   return DropdownMenuItem(
+                     value: index.toString(),
+                     child: Text(index.toString()),
+                   );
+                 }),
+                 onChanged: (value) {
+                   setState(() {
+                     _selectedStationId = value;
+                   });
+                 },
+                 validator: (value) {
+                   if (value == null || value.isEmpty) {
+                     return 'Please select a station ID';
+                   }
+                   return null;
+                 },
+               ),
+               ]),
+               const SizedBox(height: 4),
+
+               // Account Information
+               _buildSectionCard(
+                 title: 'Account Information',
+                 icon: Icons.account_circle,
+                 children: [
+
+               // Username
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Username *',
+                    hintText: 'Enter username',
+                    prefixIcon: Icon(Icons.account_circle),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter username';
+                    }
+                    return null;
+                  },
+                ),
+               const SizedBox(height: 16),
+
+                               // Password
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(
+                    labelText: 'Password *',
+                    hintText: 'Enter password',
+                    prefixIcon: Icon(Icons.lock),
+                  ),
+                  obscureText: true,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter password';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+               const SizedBox(height: 16),
+
+                               // Email
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email *',
+                    hintText: 'Enter email address',
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter email';
+                    }
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+               ]),
+               const SizedBox(height: 32),
+
+               // Submit Button
+              Container(
                 width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ElevatedButton.icon(
                   onPressed: _isLoading ? null : _handleSubmit,
-                  child: _isLoading
+                  icon: _isLoading
                       ? const SizedBox(
                           height: 20,
                           width: 20,
@@ -506,13 +760,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Text(
-                          'Register Instructor',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      : const Icon(Icons.person_add, size: 24),
+                  label: Text(
+                    _isLoading ? 'Registering...' : 'Register Instructor',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -522,13 +785,51 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: AppTheme.primaryColor,
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      margin: const EdgeInsets.only(bottom: 24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: Colors.white,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: AppTheme.primaryColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            ...children,
+          ],
+        ),
       ),
     );
   }

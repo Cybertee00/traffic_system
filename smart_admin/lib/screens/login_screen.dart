@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smart_admin/services/auth_service.dart';
+import 'package:smart_admin/services/login_service.dart';
 import 'package:smart_admin/utils/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -62,7 +62,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     });
 
     try {
-      final success = await AuthService.login(
+      await LoginService.login(
+        context,
         _usernameController.text,
         _passwordController.text,
       );
@@ -71,17 +72,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         setState(() {
           _isLoading = false;
         });
-
-        if (success) {
-          Navigator.pushReplacementNamed(context, '/dashboard');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid username or password'),
-              backgroundColor: AppTheme.errorColor,
-            ),
-          );
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -209,6 +199,23 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                               ),
                               textAlign: TextAlign.center,
                             ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
+                              ),
+                              child: Text(
+                                'Admin Access Only',
+                                style: TextStyle(
+                                  color: AppTheme.primaryColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                             const SizedBox(height: 32),
 
                             // Username Field
@@ -285,6 +292,33 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                             ),
                             const SizedBox(height: 16),
 
+                            // Admin Access Note
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange[50],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.orange[200]!),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'This application is restricted to admin and superadmin users only.',
+                                      style: TextStyle(
+                                        color: Colors.orange[700],
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
                             // Forgot Password and Signup Links
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -312,36 +346,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                               ],
                             ),
                             const SizedBox(height: 16),
-
-                            // Demo Credentials Info
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.blue[50],
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.blue[200]!),
-                              ),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'Demo Credentials:',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[700],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Admin: admin / admin123\nInstructor: instructor / instructor123',
-                                    style: TextStyle(
-                                      color: Colors.blue[600],
-                                      fontSize: 12,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            ),
                           ],
                         ),
                       ),

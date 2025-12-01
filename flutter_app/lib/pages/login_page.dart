@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'login_backend.dart';
+import 'package:provider/provider.dart';
+import 'login_backend.dart'; // Make sure this file includes the default instructor role in the login request
+import 'settings_backend.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -10,10 +12,13 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool _isPasswordVisible = false;
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   @override
   void dispose() {
-    LoginController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -21,8 +26,19 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
-    
+
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: _buildSettingsButton(context, theme),
+          ),
+        ],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -36,14 +52,16 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
+            child: Stack(
+            children: [
+              Center(
+                child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // App Logo and Title Section
+                  // App Icon
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -57,14 +75,17 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  
+
+                  // Title and subtitle
                   Text(
                     'SMART Licence APP',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
                       fontSize: 28,
-                      color: theme.textTheme.headlineMedium?.color ?? theme.primaryColor,
+                      color:
+                          theme.textTheme.headlineMedium?.color ??
+                          theme.primaryColor,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -79,7 +100,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 48),
-                  
+
                   // Login Form Card
                   Container(
                     width: size.width > 600 ? 400 : double.infinity,
@@ -115,10 +136,10 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                         const SizedBox(height: 32),
-                        
+
                         // Username Field
                         TextFormField(
-                          controller: LoginController.usernameController,
+                          controller: _usernameController,
                           decoration: InputDecoration(
                             labelText: 'Username',
                             hintText: 'Enter your username',
@@ -144,15 +165,16 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                             filled: true,
-                            fillColor: theme.inputDecorationTheme.fillColor ?? 
-                                       theme.colorScheme.surface,
+                            fillColor:
+                                theme.inputDecorationTheme.fillColor ??
+                                theme.colorScheme.surface,
                           ),
                         ),
                         const SizedBox(height: 20),
-                        
+
                         // Password Field
                         TextFormField(
-                          controller: LoginController.passwordController,
+                          controller: _passwordController,
                           obscureText: !_isPasswordVisible,
                           decoration: InputDecoration(
                             labelText: 'Password',
@@ -163,9 +185,9 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _isPasswordVisible 
-                                  ? Icons.visibility_off 
-                                  : Icons.visibility,
+                                _isPasswordVisible
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
                                 color: theme.textTheme.bodyMedium?.color,
                               ),
                               onPressed: () {
@@ -192,18 +214,23 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                             filled: true,
-                            fillColor: theme.inputDecorationTheme.fillColor ?? 
-                                       theme.colorScheme.surface,
+                            fillColor:
+                                theme.inputDecorationTheme.fillColor ??
+                                theme.colorScheme.surface,
                           ),
                         ),
                         const SizedBox(height: 24),
-                        
-                        // Login Button
+
+                        // Sign In Button
                         SizedBox(
                           width: double.infinity,
                           height: 50,
                           child: ElevatedButton(
-                            onPressed: () => LoginController.login(context),
+                            onPressed: () => LoginController.login(
+                              context,
+                              _usernameController.text,
+                              _passwordController.text,
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: theme.primaryColor,
                               foregroundColor: Colors.white,
@@ -222,17 +249,18 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        
-                        // Additional Links
+
+                        // Help Links
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             TextButton(
                               onPressed: () {
-                                // TODO: Implement forgot password
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Contact administrator for password reset'),
+                                    content: Text(
+                                      'Contact administrator for password reset',
+                                    ),
                                   ),
                                 );
                               },
@@ -246,10 +274,11 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             TextButton(
                               onPressed: () {
-                                // TODO: Implement help
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Contact system administrator for access'),
+                                    content: Text(
+                                      'Contact system administrator for access',
+                                    ),
                                   ),
                                 );
                               },
@@ -268,10 +297,155 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ],
               ),
-            ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+  
+  // Build Settings Button - Always Visible
+  Widget _buildSettingsButton(BuildContext context, ThemeData theme) {
+    return Consumer<SettingsBackend>(
+      builder: (context, settings, _) {
+        return Tooltip(
+          message: 'Network Settings\nCurrent IP: ${settings.ipAddress}',
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.cardColor.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: theme.primaryColor.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => _showIpConfigurationDialog(context, settings),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.settings_ethernet,
+                        color: theme.primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        settings.ipAddress,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.textTheme.bodyMedium?.color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+  
+  // IP Configuration Dialog (same as in dashboard)
+  void _showIpConfigurationDialog(BuildContext context, SettingsBackend settings) {
+    final TextEditingController ipController = TextEditingController(text: settings.ipAddress);
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Network Configuration'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Configure the server IP address for network connections:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ipController,
+                decoration: const InputDecoration(
+                  labelText: 'Server IP Address',
+                  hintText: '172.16.24.23',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.settings_ethernet),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'This IP will be used for:\n'
+                '• FastAPI Server (port 8000)\n'
+                '• Parallel Parking WebSocket (port 8765)\n'
+                '• Alley Docking WebSocket (port 8766)\n'
+                '• Hill Start WebSocket (port 8767)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                await settings.resetToDefault();
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Reset to default IP address')),
+                  );
+                }
+              },
+              child: const Text('Reset to Default'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newIp = ipController.text.trim();
+                if (newIp.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('IP address cannot be empty')),
+                  );
+                  return;
+                }
+                
+                try {
+                  await settings.setIpAddress(newIp);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('IP address updated to $newIp')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${e.toString()}')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

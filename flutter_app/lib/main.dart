@@ -7,17 +7,21 @@ import 'pages/hillStart_backend.dart';
 import 'pages/car_details_backend.dart';
 import 'pages/theme_backend.dart';
 import 'pages/audio_backend.dart';
+import 'pages/session_backend.dart';
+import 'pages/settings_backend.dart';
 
 void main() {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => SettingsBackend()),
         ChangeNotifierProvider(create: (_) => Page2Backend()),
         ChangeNotifierProvider(create: (_) => Page3Backend()),
         ChangeNotifierProvider(create: (_) => HillStartBackend()),
         ChangeNotifierProvider(create: (_) => CarDetailsBackend()),
         ChangeNotifierProvider(create: (_) => ThemeBackend()),
         ChangeNotifierProvider(create: (_) => AudioBackend()),
+        ChangeNotifierProvider(create: (_) => SessionBackend()),
         // Add more providers as needed for other checklists
       ],
       child: MyApp(),
@@ -35,6 +39,7 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'SMART Licence APP',
           theme: themeBackend.theme,
+          debugShowCheckedModeBanner: false, // Remove debug ribbon
           home: const LoginPage(), // start on the login page
         );
       },

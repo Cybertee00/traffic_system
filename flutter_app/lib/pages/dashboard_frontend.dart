@@ -12,6 +12,8 @@ import 'report_preview_page.dart';
 import 'theme_backend.dart';
 import 'audio_backend.dart';
 import 'dart:math' as math;
+import 'session_backend.dart';
+import 'settings_backend.dart';
 
 
 class Page1 extends StatefulWidget {
@@ -22,9 +24,16 @@ class Page1 extends StatefulWidget {
 }
 class Page1State extends State<Page1> 
 {
-  Learner selectedLearner = learners[0];
-  Officer selectedOfficer = officers[0];
+  Learner? selectedLearner;
+  List<Learner> availableLearners = [];
+  bool isLoadingLearners = true;
+  Officer? selectedOfficer;
   bool isEditingOfficer = false;
+  
+  // New state variables for instructor profile
+  Instructor? currentInstructor;
+  bool isLoadingInstructor = true;
+  bool hasLoadedDataOnce = false; // Track if data has been loaded at least once
  
   late Ticker _ticker;
 
@@ -32,18 +41,12 @@ class Page1State extends State<Page1>
   Duration roadElapsed = Duration.zero;
 
 
-  bool isFieldRunning = false;
-  bool isRoadRunning = false;
+
   
 
-  final TextEditingController officerNameController =
-    TextEditingController(text: 'Officer Name');
-
-  final TextEditingController officerInfraNrController =
-    TextEditingController(text: 'Infra nr');
-
-  final TextEditingController officerEmailController =
-    TextEditingController(text: 'user@example.com');
+  final TextEditingController officerNameController = TextEditingController();
+  final TextEditingController officerInfraNrController = TextEditingController();
+  final TextEditingController officerEmailController = TextEditingController();
   
   final TextEditingController carLicenceController = TextEditingController();
   final TextEditingController carRegController = TextEditingController();
@@ -52,6 +55,12 @@ class Page1State extends State<Page1>
   void initState() {
     super.initState();
     _ticker = Ticker(_onTick)..start();
+    
+    // Fetch learners for current date
+    _fetchLearners();
+    
+    // Fetch instructor profile
+    _fetchInstructorProfile();
     
     // Initialize controllers with provider values after the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -64,6 +73,88 @@ class Page1State extends State<Page1>
       }
     });
   }
+
+  Future<void> _fetchInstructorProfile() async {
+    // Only fetch if not already loaded or if test hasn't started
+    if (hasLoadedDataOnce && isTestSessionActive) {
+      return; // Skip fetching if test is in progress and data was already loaded
+    }
+    
+    setState(() {
+      isLoadingInstructor = true;
+    });
+    
+    try {
+      // Get the current user_id from the session
+      final session = Provider.of<SessionBackend>(context, listen: false);
+      final userId = session.userId;
+      
+      if (userId != null) {
+        // Fetch instructor profile based on the current user_id
+        final instructor = await fetchInstructorProfile(userId, context: context);
+        setState(() {
+          currentInstructor = instructor;
+          isLoadingInstructor = false;
+          hasLoadedDataOnce = true;
+        });
+        
+        // Update controllers with instructor data
+        if (instructor != null) {
+          officerInfraNrController.text = instructor.infraNr;
+        }
+      } else {
+        setState(() {
+          isLoadingInstructor = false;
+        });
+        print('No user_id available in session');
+      }
+    } catch (e) {
+      setState(() {
+        isLoadingInstructor = false;
+      });
+      print('Error fetching instructor profile: $e');
+    }
+  }
+
+  Future<void> _fetchLearners() async {
+    // Only fetch if not already loaded or if test hasn't started
+    if (hasLoadedDataOnce && isTestSessionActive) {
+      return; // Skip fetching if test is in progress and data was already loaded
+    }
+    
+    setState(() {
+      isLoadingLearners = true;
+    });
+    
+    try {
+      final learners = await fetchLearnersForCurrentDate(context: context);
+      setState(() {
+        availableLearners = learners;
+        
+        // Check if current selected learner is still in the list
+        if (selectedLearner != null) {
+          final isStillAvailable = learners.any((learner) => learner.learnerId == selectedLearner!.learnerId);
+          if (!isStillAvailable) {
+            // Current learner was removed (completed), select first available
+            selectedLearner = learners.isNotEmpty ? learners.first : null;
+          }
+        } else if (learners.isNotEmpty) {
+          // No learner selected, select first available
+          selectedLearner = learners.first;
+        }
+        
+        isLoadingLearners = false;
+        hasLoadedDataOnce = true;
+      });
+    } catch (e) {
+      setState(() {
+        isLoadingLearners = false;
+      });
+      print('Error fetching learners: $e');
+    }
+  }
+
+
 
   @override
   void didChangeDependencies() {
@@ -138,6 +229,26 @@ class Page1State extends State<Page1>
     final page3Backend = Provider.of<Page3Backend>(context);
     final hillStartBackend = Provider.of<HillStartBackend>(context);
     final themeBackend = Provider.of<ThemeBackend>(context);
+    final session = Provider.of<SessionBackend>(context);
+    final settingsBackend = Provider.of<SettingsBackend>(context);
+    
+    // Sync IP address from settings to backends when it changes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final currentIp = settingsBackend.ipAddress;
+      page2Backend.updateIpAddress(currentIp);
+      page3Backend.updateIpAddress(currentIp);
+      hillStartBackend.updateIpAddress(currentIp);
+    });
+
+    // Prefer fetched instructor data, then session details, then fallback to hardcoded officer
+    final String displayOfficerName = (session.officerDisplayName.isNotEmpty)
+        ? session.officerDisplayName
+        : selectedOfficer?.name ?? 'No Officer Selected';
+    final String displayInfra = currentInstructor?.infraNr.isNotEmpty == true
+        ? currentInstructor!.infraNr
+        : (session.infraNr != null && session.infraNr!.trim().isNotEmpty)
+            ? session.infraNr!
+            : selectedOfficer?.infraNr ?? 'No INF Number';
 
     return Scaffold(
         appBar: AppBar(
@@ -155,38 +266,84 @@ class Page1State extends State<Page1>
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              //const DrawerHeader(
-                //decoration: BoxDecoration(color: Colors.blue),
-                //child: Text('Settings', style: TextStyle(color: Colors.white)),
-              //),
+              DrawerHeader(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).primaryColor,
+                      Theme.of(context).primaryColor.withOpacity(0.8),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.settings,
+                      size: 48,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Settings',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      displayOfficerName,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               SwitchListTile(
                 title: const Text("Dark Mode"),
                 value: themeBackend.isDarkMode,
                 onChanged: (value) {
                   toggleTheme();
                 },
-                secondary: const Icon(Icons.dark_mode),
+                secondary: Icon(
+                  themeBackend.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                  color: Theme.of(context).primaryColor,
+                ),
               ),
-              ListTile(
-                leading: const Icon(Icons.settings),
-                title: const Text('Settings'),
-                onTap: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginPage()),
+              const Divider(),
+              // Network Configuration Section
+              Consumer<SettingsBackend>(
+                builder: (context, settings, child) {
+                  return ListTile(
+                    leading: Icon(Icons.settings_ethernet, color: Theme.of(context).primaryColor),
+                    title: const Text('Network Configuration'),
+                    subtitle: Text('Server IP: ${settings.ipAddress}'),
+                    onTap: () => _showIpConfigurationDialog(context, settings),
                   );
-
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: Icon(Icons.info_outline, color: Theme.of(context).primaryColor),
+                title: const Text('About'),
+                subtitle: const Text('SMART Licence APP v1.0'),
+                onTap: () {
+                  // You can add an about dialog here
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.logout),
+                leading: Icon(Icons.logout, color: Theme.of(context).primaryColor),
                 title: const Text('Logout'),
+                subtitle: const Text('Sign out of your account'),
                 onTap: () {
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (context) => const LoginPage()),
                   );
-
                 },
               ),
             ],
@@ -208,23 +365,177 @@ class Page1State extends State<Page1>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text("Officer/Instructor Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        DropdownButton<Officer>(
-                          value: selectedOfficer,
-                          onChanged: (Officer? newValue) {
-                            setState(() {
-                              selectedOfficer = newValue!;
-                            });
-                          },
-                          items: officers.map((Officer officer) {
-                            return DropdownMenuItem<Officer>(
-                              value: officer,
-                              child: Text(officer.name),
-                            );
-                          }).toList(),
-                        ),
+                        if (isLoadingInstructor)
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 12),
+                    if (isLoadingInstructor)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text("Loading instructor profile..."),
+                        ),
+                      )
+                    else
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 30,
+                            backgroundColor: Colors.grey.shade300,
+                            child: const Icon(Icons.person, size: 30),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  displayOfficerName,
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  displayInfra,
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+
+
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+                          side: isTestSessionActive 
+                ? BorderSide(color: Colors.grey[300]!, width: 1)
+                : BorderSide.none,
+          ),
+          elevation: isTestSessionActive ? 2 : 4,
+          color: isTestSessionActive ? Colors.grey[50] : null,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Dropdown to pick learner
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person, 
+                            size: 24, 
+                            color: isTestSessionActive ? Colors.grey[400] : null,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Learner Details", 
+                            style: TextStyle(
+                              fontSize: 18, 
+                              fontWeight: FontWeight.bold,
+                              color: isTestSessionActive ? Colors.grey[600] : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (isLoadingLearners)
+                        const CircularProgressIndicator()
+                      else if (availableLearners.isNotEmpty)
+                        DropdownButton<Learner>(
+                          value: selectedLearner,
+                          onChanged: isTestSessionActive ? null : (Learner? newValue) {
+                            setState(() {
+                              // If test has ended and a different learner is selected, mark as new learner selected
+                              if (isTestEnded && selectedLearner != null && newValue != null && 
+                                  selectedLearner!.idNumber != newValue.idNumber) {
+                                markNewLearnerSelected();
+                              }
+                              selectedLearner = newValue!;
+                            });
+                          },
+                          items: availableLearners.map((Learner learner) {
+                            return DropdownMenuItem<Learner>(
+                              value: learner,
+                              child: Text(learner.name),
+                            );
+                          }).toList(),
+                          // Disable dropdown when test session is active
+                          icon: isTestSessionActive 
+                              ? Icon(Icons.lock, color: Colors.grey[400])
+                              : Icon(Icons.arrow_drop_down),
+                          style: isTestSessionActive 
+                              ? TextStyle(color: Colors.grey[400])
+                              : null,
+                        )
+                      else
+                        const Text("No learners for today", style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Helper text when test has ended
+                  if (isTestEnded && !canStartNewTest())
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange, size: 16),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Select a different learner to start a new test",
+                              style: TextStyle(color: Colors.orange.shade700, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  
+                                    // Helper text when test session is active (dropdown disabled)
+                  if (isTestSessionActive)
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock, color: Colors.red, size: 16),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Test session active - Learner selection disabled until both field and road tests are complete",
+                              style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+
+
+                  // Display learner info
+                  if (selectedLearner != null)
                     Row(
                       children: [
                         CircleAvatar(
@@ -237,79 +548,25 @@ class Page1State extends State<Page1>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                selectedOfficer.name,
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                selectedOfficer.infraNr,
-                                style: const TextStyle(fontSize: 16),
-                              ),
+                              Text("Name: ${selectedLearner!.name}", style: const TextStyle(fontSize: 14)),
+                              Text("ID: ${selectedLearner!.idNumber}", style: const TextStyle(fontSize: 14)),
+                              Text("Code: ${selectedLearner!.code}", style: const TextStyle(fontSize: 14)),
+                              Text("Gender: ${selectedLearner!.gender}", style: const TextStyle(fontSize: 14)),
                             ],
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Dropdown to pick learner
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Learner Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      DropdownButton<Learner>(
-                        value: selectedLearner,
-                        onChanged: (Learner? newValue) {
-                          setState(() {
-                            selectedLearner = newValue!;
-                          });
-                        },
-                        items: learners.map((Learner learner) {
-                          return DropdownMenuItem<Learner>(
-                            value: learner,
-                            child: Text(learner.name),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Display learner info
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.grey[300],
-                        child: const Icon(Icons.person, size: 30),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Name: ${selectedLearner.name}", style: const TextStyle(fontSize: 14)),
-                            Text("ID: ${selectedLearner.idNumber}", style: const TextStyle(fontSize: 14)),
-                            Text("Code: ${selectedLearner.code}", style: const TextStyle(fontSize: 14)),
-                            Text("Gender: ${selectedLearner.gender}", style: const TextStyle(fontSize: 14)),
-                          ],
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      child: const Center(
+                        child: Text(
+                          "No learner selected",
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
                 ],
               ),
             ),
@@ -326,7 +583,13 @@ class Page1State extends State<Page1>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Car Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          const Icon(Icons.directions_car, size: 24),
+                          const SizedBox(width: 8),
+                          const Text('Car Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
@@ -356,7 +619,7 @@ class Page1State extends State<Page1>
                           const SizedBox(width: 8),
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: carDetails.carTransmission.isNotEmpty ? carDetails.carTransmission : null,
+                              initialValue: carDetails.carTransmission.isNotEmpty ? carDetails.carTransmission : null,
                               decoration: const InputDecoration(
                                 labelText: 'Transmission Type',
                                 border: OutlineInputBorder(),
@@ -374,7 +637,7 @@ class Page1State extends State<Page1>
                           const SizedBox(width: 8),
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: carDetails.carWeather.isNotEmpty ? carDetails.carWeather : null,
+                              initialValue: carDetails.carWeather.isNotEmpty ? carDetails.carWeather : null,
                               decoration: const InputDecoration(
                                 labelText: 'Weather Conditions',
                                 border: OutlineInputBorder(),
@@ -407,7 +670,13 @@ class Page1State extends State<Page1>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Penalty Points', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      const Icon(Icons.warning, size: 24),
+                      const SizedBox(width: 8),
+                      const Text('Penalty Points', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   _buildPenaltyRow('Pretrip', page2Backend, ['PRETRIP INTERIOR', 'PRETRIP EXTERIOR']),
                   _buildPenaltyRow('Parallel Parking', page2Backend, ['PARALLEL PARKING (Left)', 'PARALLEL PARKING (Right)']),
@@ -462,8 +731,8 @@ class Page1State extends State<Page1>
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildProgressTimer("Field Time", fieldTestDuration, fieldTestTotal),
-                  _buildProgressTimer("Road Trip Time", roadTestDuration, roadTestTotal),
-                  _buildProgressTimer("Total Test Time", totalTestDuration, fieldTestTotal + roadTestTotal),
+                  _buildProgressTimer("Road Time", roadTestDuration, roadTestTotal),
+                  _buildProgressTimer("Total Time", totalTestDuration, fieldTestTotal + roadTestTotal),
                 ],
               ),
             ),
@@ -481,54 +750,89 @@ class Page1State extends State<Page1>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton(
-                      onPressed: () {
-                        if (isTestEnded) {
-                          // Reset for new test
-                          resetForNewTest(() => setState(() {}),
-                            page2Backend: page2Backend,
-                            page3Backend: page3Backend,
-                            hillStartBackend: hillStartBackend,
-                            carDetailsBackend: Provider.of<CarDetailsBackend>(context, listen: false),
-                          );
-                        } else {
-                          // Handle normal test button
-                          final audioBackend = Provider.of<AudioBackend>(context, listen: false);
-                          handleTestButton(() => setState(() {}),
-                            audioBackend: audioBackend,
-                            learnerId: selectedLearner.idNumber,
-                          );
-                        }
-                      },
-                      child: Text(actionLabel),
+                    Tooltip(
+                      message: isTestEnded && !canStartNewTest() 
+                        ? "Select a different learner to start a new test" 
+                        : "",
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (isTestEnded) {
+                            // Only allow starting new test if a new learner has been selected
+                            if (canStartNewTest()) {
+                              // Reset for new test
+                              resetForNewTest(() {
+                                setState(() {
+                                  hasLoadedDataOnce = false; // Reset data loading flag
+                                });
+                              },
+                                page2Backend: page2Backend,
+                                page3Backend: page3Backend,
+                                hillStartBackend: hillStartBackend,
+                                carDetailsBackend: Provider.of<CarDetailsBackend>(context, listen: false),
+                              );
+                            }
+                          } else {
+                            // Handle normal test button
+                            if (selectedLearner != null) {
+                              final audioBackend = Provider.of<AudioBackend>(context, listen: false);
+                              handleTestButton(() => setState(() {}),
+                                audioBackend: audioBackend,
+                                learnerId: selectedLearner!.idNumber,
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isTestEnded && !canStartNewTest() ? Colors.grey : null,
+                        ),
+                        child: Text(actionLabel),
+                      ),
                     ),
                     ElevatedButton(
-                      onPressed: () {
+                      onPressed: (!isRoadRunning && !isTestEnded) ? null : () {
                         if (!isTestEnded) {
                           // End the test
                           final audioBackend = Provider.of<AudioBackend>(context, listen: false);
-                          handleEndTestButton(() => setState(() {}),
+                          handleEndTestButton(() {
+                            setState(() {
+                              // Refresh learner list after test completion
+                              if (selectedLearner != null) {
+                                _fetchLearners();
+                              }
+                            });
+                          },
                             audioBackend: audioBackend,
+                            currentLearnerId: selectedLearner?.learnerId,
+                            page2Backend: page2Backend,
+                            page3Backend: page3Backend,
+                            hillStartBackend: hillStartBackend,
+                            licenseCode: selectedLearner?.code,
+                            context: context,
                           );
                         } else {
                           // Navigate to preview report
-                          final carDetails = Provider.of<CarDetailsBackend>(context, listen: false);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => ReportPreviewPage(
-                              officer: selectedOfficer,
-                              learner: selectedLearner,
-                              carLicence: carDetails.carLicence,
-                              carReg: carDetails.carReg,
-                              carTransmission: carDetails.carTransmission,
-                              carWeather: carDetails.carWeather,
-                              fieldTestDuration: fieldElapsed,
-                              roadTestDuration: roadElapsed,
-                              totalTestDuration: fieldElapsed + roadElapsed,
-                            )),
-                          );
+                          if (selectedLearner != null) {
+                            final carDetails = Provider.of<CarDetailsBackend>(context, listen: false);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => ReportPreviewPage(
+                                officer: Officer(name: displayOfficerName, infraNr: displayInfra),
+                                learner: selectedLearner!,
+                                carLicence: carDetails.carLicence,
+                                carReg: carDetails.carReg,
+                                carTransmission: carDetails.carTransmission,
+                                carWeather: carDetails.carWeather,
+                                fieldTestDuration: fieldElapsed,
+                                roadTestDuration: roadElapsed,
+                                totalTestDuration: fieldElapsed + roadElapsed,
+                              )),
+                            );
+                          }
                         }
                       },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: (!isRoadRunning && !isTestEnded) ? Colors.grey : null,
+                      ),
                       child: Text(endTestButtonLabel),
                     ),
                   ],
@@ -565,16 +869,117 @@ class Page1State extends State<Page1>
       ),
     );
   }
+  
+  // IP Configuration Dialog
+  void _showIpConfigurationDialog(BuildContext context, SettingsBackend settings) {
+    final TextEditingController ipController = TextEditingController(text: settings.ipAddress);
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Network Configuration'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Configure the server IP address for network connections:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ipController,
+                decoration: const InputDecoration(
+                  labelText: 'Server IP Address',
+                  hintText: '172.16.24.23',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.settings_ethernet),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'This IP will be used for:\n'
+                '• FastAPI Server (port 8000)\n'
+                '• Parallel Parking WebSocket (port 8765)\n'
+                '• Alley Docking WebSocket (port 8766)\n'
+                '• Hill Start WebSocket (port 8767)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                await settings.resetToDefault();
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Reset to default IP address')),
+                  );
+                }
+              },
+              child: const Text('Reset to Default'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newIp = ipController.text.trim();
+                if (newIp.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('IP address cannot be empty')),
+                  );
+                  return;
+                }
+                
+                try {
+                  await settings.setIpAddress(newIp);
+                  // Update all backends with new IP
+                  final page2Backend = Provider.of<Page2Backend>(context, listen: false);
+                  final page3Backend = Provider.of<Page3Backend>(context, listen: false);
+                  final hillStartBackend = Provider.of<HillStartBackend>(context, listen: false);
+                  
+                  page2Backend.updateIpAddress(newIp);
+                  page3Backend.updateIpAddress(newIp);
+                  hillStartBackend.updateIpAddress(newIp);
+                  
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('IP address updated to $newIp')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${e.toString()}')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class DashboardGraphsGrid extends StatelessWidget {
-  const DashboardGraphsGrid({Key? key}) : super(key: key);
+  const DashboardGraphsGrid({super.key});
 
   @override
   Widget build(BuildContext context) {
     final page2Backend = Provider.of<Page2Backend>(context);
     final page3Backend = Provider.of<Page3Backend>(context);
-    final hillStartBackend = Provider.of<HillStartBackend>(context);
     final progressColors = [
       Colors.blue, Colors.red, Colors.green, Colors.orange, Colors.purple, Colors.teal, Colors.brown, Colors.indigo
     ];
@@ -589,7 +994,11 @@ class DashboardGraphsGrid extends StatelessWidget {
           _buildPenaltyProgressBar('Pretrip', page2Backend, ['PRETRIP INTERIOR', 'PRETRIP EXTERIOR'], progressColors[0], getIconForIndex(0)),
           _buildPenaltyProgressBar('Parallel Parking', page2Backend, ['PARALLEL PARKING (Left)', 'PARALLEL PARKING (Right)'], progressColors[1], getIconForIndex(1)),
           _buildPenaltyProgressBar('Alley Docking', page3Backend, ['ALLEY DOCKING (Left)', 'ALLEY DOCKING (Right)'], progressColors[2], getIconForIndex(2)),
-          _buildPenaltyProgressBar('Hill Start', hillStartBackend, ['INCLINE START'], progressColors[3], getIconForIndex(3)),
+          Consumer<HillStartBackend>(
+            builder: (context, hillStartBackend, child) {
+              return _buildPenaltyProgressBar('Hill Start', hillStartBackend, ['INCLINE START'], progressColors[3], getIconForIndex(3));
+            },
+          ),
           _buildPenaltyProgressBar('3 Point Turn', page2Backend, ['TURN IN THE ROAD'], progressColors[4], getIconForIndex(4)),
           _buildPenaltyProgressBar('Left Turn', page2Backend, ['LEFT TURN'], progressColors[5], getIconForIndex(5)),
           _buildPenaltyProgressBar('Straight Reverse', page2Backend, ['STRAIGHT REVERSING'], progressColors[6], getIconForIndex(6)),
@@ -673,13 +1082,15 @@ Widget _buildPenaltyProgressBar(String label, dynamic backend, List<String> sect
     maxPenalty += getMaxPenaltyForSection(sectionTitle);
     currentPenalty += getCurrentPenaltyForSection(sectionTitle, backend);
   }
-  // Inverse logic: start at 100%, decrease as penalties are incurred
+  // Progress logic: show 0% when test hasn't started, calculate based on penalties when test is in progress
   double percent = 0.0;
   if (maxPenalty > 0) {
     if (currentPenalty > 0) {
+      // Test has started and penalties recorded - calculate actual progress
       percent = (1 - (currentPenalty / maxPenalty)).clamp(0.0, 1.0);
     } else {
-      percent = 0.0; // Bar remains empty until the first penalty is recorded
+      // No penalties recorded - test hasn't started, show 0%
+      percent = 0.0;
     }
   }
   int percentage = (percent * 100).toInt();
@@ -735,11 +1146,11 @@ class TestResultsDoughnut extends StatefulWidget {
   final dynamic hillStartBackend;
 
   const TestResultsDoughnut({
-    Key? key,
+    super.key,
     required this.page2Backend,
     required this.page3Backend,
     required this.hillStartBackend,
-  }) : super(key: key);
+  });
 
   @override
   State<TestResultsDoughnut> createState() => _TestResultsDoughnutState();

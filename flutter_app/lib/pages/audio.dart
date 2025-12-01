@@ -289,7 +289,7 @@ class AudioPage extends StatelessWidget {
   }
 
   void _showInfoDialog(BuildContext context) {
-    final audioBackend = Provider.of<AudioBackend>(context, listen: false);
+    //final audioBackend = Provider.of<AudioBackend>(context, listen: false);
     
     showDialog(
       context: context,

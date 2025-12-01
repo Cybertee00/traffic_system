@@ -1,161 +1,105 @@
-# SMART - System for Motorists Automated Road Testing
+# SMART Admin App
 
-A comprehensive admin application for managing the SMART (System for Motorists Automated Road Testing) system. This Flutter application provides a clean separation between frontend and backend components.
+A Flutter application for managing the SMART (System for Motorists Automated Road Testing) system.
 
 ## Features
 
-### 1. Login System
-- **Username/Password Authentication**: Secure login with role-based access
-- **Forgot Password**: Password reset functionality
-- **Sign Up**: Registration for new users
-- **Demo Credentials**:
-  - Admin: `admin` / `admin123`
-  - Instructor: `instructor` / `instructor123`
-
-### 2. Dashboard
-- **Graphical Statistics**: Visual representation of system data
-- **User Management**: Overview of all registered users
-  - Admins
-  - Instructors
-  - Learners
-- **Testing Stations**: Active and inactive station tracking
-- **Report Analytics**:
-  - Total reports generated
-  - Monthly report statistics
-  - Pass/fail rates
-  - Provincial breakdown
-- **Quick Actions**: Easy access to common tasks
-
-### 3. Registration System
-- **Instructor Registration**: Comprehensive form with all required fields
-- **Data Validation**: South African ID and phone number validation
-- **OTP System**: SMS-based verification for initial password
-- **Permission-based Access**: Role-based registration permissions
-
-### 4. Instructor Management
-- **View Instructors**: List all registered instructors
-- **Search & Filter**: Find instructors by name, INF number, or status
-- **Status Management**: Activate/deactivate instructors
-- **Detailed View**: Complete instructor information
-- **Edit Functionality**: Update instructor details
-
-## Project Structure
-
-```
-lib/
-├── main.dart                 # App entry point
-├── screens/                  # Frontend UI Components
-│   ├── login_screen.dart     # Login page
-│   ├── dashboard_screen.dart # Dashboard with statistics
-│   ├── registration_screen.dart # Instructor registration
-│   └── instructor_management_screen.dart # Instructor management
-├── services/                 # Backend Services
-│   ├── auth_service.dart     # Authentication logic
-│   ├── api_service.dart      # API communication
-│   └── navigation_service.dart # Route management
-└── utils/                    # Utilities
-    └── app_theme.dart        # App theming and colors
-```
-
-## Backend Integration
-
-The app is designed with a clean separation between frontend and backend:
-
-### API Service (`lib/services/api_service.dart`)
-- **Authentication**: Login, password reset
-- **Dashboard Data**: Statistics and analytics
-- **Instructor Management**: CRUD operations
-- **Validation**: South African ID and phone validation
-
-### Authentication Service (`lib/services/auth_service.dart`)
-- **Session Management**: User authentication state
-- **Role-based Access**: Permission checking
-- **Demo Mode**: Local authentication for testing
-
-## Data Models
-
-### Instructor Registration Fields
-1. **Name** (required)
-2. **Surname** (required)
-3. **Date of Birth** (datetime picker)
-4. **Gender** (Male/Female/Other)
-5. **Nationality** (dropdown)
-6. **Race** (dropdown)
-7. **ID Number** (13-digit South African validation)
-8. **Contact Number** (South African phone validation)
-9. **Physical Address** (required)
-10. **INF Number** (required)
-
-## Validation Rules
-
-### South African ID Number
-- Must be exactly 13 digits
-- Date portion validation (YYMMDD)
-- Format: YYMMDD 0000 000
-
-### South African Phone Number
-- Format: +27XXXXXXXXX or 0XXXXXXXXX
-- Length validation for both formats
-
-## Installation & Setup
-
-1. **Install Dependencies**:
-   ```bash
-   flutter pub get
-   ```
-
-2. **Run the Application**:
-   ```bash
-   flutter run
-   ```
-
-3. **Demo Mode**:
-   - Use the provided demo credentials
-   - All data is simulated for demonstration
-   - No actual backend connection required
-
-## Backend API Endpoints
-
-The app is designed to work with these API endpoints:
-
-### Authentication
-- `POST /auth/login` - User login
-- `POST /auth/forgot-password` - Password reset
-
 ### Dashboard
-- `GET /dashboard/stats` - Dashboard statistics
+- Overview of system statistics
+- Quick access to main functions
+- Reports by province visualization
 
-### Instructor Management
-- `GET /instructors` - List all instructors
-- `POST /instructors` - Register new instructor
-- `PUT /instructors/{id}` - Update instructor
-- `PATCH /instructors/{id}/status` - Toggle status
+### User Management
+- **Register Instructor**: Add new instructors to the system
+- **Manage Instructors**: View, edit, and manage existing instructors
+- **Learner Booking**: Create new learner bookings with comprehensive information
 
-## Security Features
+### Learner Booking System
 
-- **Role-based Access Control**: Different permissions for admins and instructors
-- **Input Validation**: Comprehensive form validation
-- **Secure Authentication**: Token-based authentication (ready for implementation)
-- **Data Protection**: Sensitive data handling
+The learner booking feature allows administrators to create new learner bookings with the following information:
+
+#### Personal Information
+- Name
+- Surname
+- Date of Birth
+- Gender (Male/Female/Other)
+- Nationality
+- ID Number
+- Contact Number
+- Physical Address
+
+#### License Information
+- License Code
+- Test Date
+- Booking Date (automatically set to current date)
+
+#### System Information
+- Station ID
+- Learner ID
+- Instructor ID (assigned instructor)
+
+#### Account Information
+- Username
+- Email
+- Role (automatically set to "learner")
+- Is Active (automatically set to true)
+- User ID (automatically generated by incrementing from database)
+
+## Technical Details
+
+### Architecture
+- **Frontend**: Flutter with Material Design
+- **State Management**: StatefulWidget for local state
+- **Navigation**: Named routes with NavigationService
+- **API Integration**: HTTP service for backend communication
+
+### Key Components
+
+#### LearnerBookingScreen
+- Comprehensive form with validation
+- Date pickers for date fields
+- Dropdown for gender selection
+- Automatic user ID generation
+- Form validation and error handling
+
+#### LearnerService
+- API integration for CRUD operations
+- Automatic user ID generation logic
+- Error handling and response management
+- Support for filtering by instructor and station
+
+### Database Integration
+
+The system automatically handles:
+- User ID generation by counting existing learners and incrementing
+- Data validation before submission
+- Error handling for API failures
+- Success/failure feedback to users
+
+## Getting Started
+
+1. Ensure Flutter is installed and configured
+2. Run `flutter pub get` to install dependencies
+3. Update the API base URL in `lib/services/learner_service.dart`
+4. Run the application with `flutter run`
+
+## API Endpoints
+
+The learner booking system expects the following API endpoints:
+
+- `GET /api/learners/count` - Get count of existing learners
+- `POST /api/learners` - Create new learner booking
+- `GET /api/learners` - Get all learners
+- `GET /api/learners/:id` - Get learner by ID
+- `PUT /api/learners/:id` - Update learner
+- `DELETE /api/learners/:id` - Delete learner
+- `GET /api/learners/instructor/:id` - Get learners by instructor
+- `GET /api/learners/station/:id` - Get learners by station
 
 ## Future Enhancements
 
-1. **Real Backend Integration**: Connect to actual API endpoints
-2. **Database Integration**: Persistent data storage
-3. **Push Notifications**: Real-time updates
-4. **Offline Support**: Local data caching
-5. **Advanced Analytics**: Detailed reporting features
-6. **Multi-language Support**: Internationalization
-7. **Dark Mode**: Theme customization
-
-## Contributing
-
-1. Follow the existing code structure
-2. Maintain separation between frontend and backend
-3. Add proper validation for all forms
-4. Include error handling for API calls
-5. Test thoroughly before submitting
-
-## License
-
-This project is developed for the Traffic Department's SMART system administration.
+- Learner management screen for viewing and editing existing bookings
+- Bulk import functionality
+- Advanced search and filtering
+- Report generation for learner statistics
+- Integration with testing station systems

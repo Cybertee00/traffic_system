@@ -42,7 +42,7 @@ class _CollapsibleChecklist extends StatefulWidget {
 }
 
 class _CollapsibleChecklistState extends State<_CollapsibleChecklist> {
-  Map<String, bool> _expanded = {};
+  final Map<String, bool> _expanded = {};
 
   @override
 void initState() {
@@ -136,13 +136,26 @@ void _syncExpandedMap() {
                       final count = backend.getCheckCount(key);
                       return ListTile(
                         leading: IconButton(
-                          icon: Icon(Icons.add_rounded, color: Colors.green),
+                          icon: const Icon(Icons.add_rounded, color: Colors.green),
                           onPressed: () {
                             backend.incrementCheck(key);
                           },
                         ),
                         title: Text(check.description),
-                        trailing: Text('$count'),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: count > 0 ? Colors.red.withOpacity(0.1) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$count',
+                            style: TextStyle(
+                              fontWeight: count > 0 ? FontWeight.bold : FontWeight.normal,
+                              color: count > 0 ? Colors.red : null,
+                            ),
+                          ),
+                        ),
                       );
                     }).toList(),
                   ),

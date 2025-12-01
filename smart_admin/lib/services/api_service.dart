@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'https://api.smart-system.com'; // Replace with actual API URL
+  static const String baseUrl = 'http://localhost:8000'; // Local API URL
   
   // Authentication
   static Future<Map<String, dynamic>> login(String username, String password) async {
@@ -18,6 +18,14 @@ class ApiService {
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
+      } else if (response.statusCode == 500) {
+        // Handle FastAPI 500 error as authentication failure
+        try {
+          final errorData = json.decode(response.body);
+          throw Exception(errorData['detail'] ?? 'Invalid credentials');
+        } catch (e) {
+          throw Exception('Invalid credentials');
+        }
       } else {
         throw Exception('Login failed: ${response.statusCode}');
       }
@@ -162,7 +170,7 @@ class ApiService {
 
   static Future<bool> toggleInstructorStatus(String id, String status) async {
     try {
-      final response = await http.patch(
+      final response = await http.put(
         Uri.parse('$baseUrl/instructors/$id/status'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'status': status}),
@@ -171,6 +179,194 @@ class ApiService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  // Instructor Registration Methods
+  static Future<int> getNextUserId() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/id/last'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return (data['last_id'] ?? 0) + 1;
+      }
+      return 1; // Default to 1 if no users exist
+    } catch (e) {
+      print('Error getting next user ID: $e');
+      return 1;
+    }
+  }
+
+  static Future<bool> validateStation(int stationId) async {
+    try {
+      print('Validating station ID: $stationId');
+      final response = await http.get(
+        Uri.parse('$baseUrl/stations/$stationId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      print('Station validation response status: ${response.statusCode}');
+      print('Station validation response body: ${response.body}');
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error validating station: $e');
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>> createUser({
+    required String username,
+    required String password,
+    required String email,
+    required String role,
+    required bool isActive,
+  }) async {
+    try {
+      print('Creating user with data:');
+      print('username: $username');
+      print('email: $email');
+      print('role: $role');
+      print('is_active: $isActive');
+      
+      final requestBody = {
+        'username': username,
+        'password': password,
+        'email': email,
+        'role': role,
+        'is_active': isActive,
+      };
+      
+      print('Request body: ${json.encode(requestBody)}');
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        print('Created user data: $data');
+        print('User ID: ${data['id']}');
+        return {'success': true, 'data': data, 'user_id': data['id']};
+      } else {
+        final error = json.decode(response.body);
+        return {'success': false, 'message': error['detail'] ?? 'Failed to create user'};
+      }
+    } catch (e) {
+      print('Error creating user: $e');
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> createInstructorProfile({
+    required int userId,
+    required String infNr,
+    required int stationId,
+  }) async {
+    try {
+      print('Creating instructor profile with data:');
+      print('user_id: $userId');
+      print('inf_nr: $infNr');
+      print('station_id: $stationId');
+      
+      final requestBody = {
+        'user_id': userId,
+        'inf_nr': infNr,
+        'station_id': stationId,
+      };
+      
+      print('Request body: ${json.encode(requestBody)}');
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/instructor-profiles/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        return {'success': true, 'data': data};
+      } else {
+        final error = json.decode(response.body);
+        return {'success': false, 'message': error['detail'] ?? 'Failed to create instructor profile'};
+      }
+    } catch (e) {
+      print('Error creating instructor profile: $e');
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> createUserProfile({
+    required int userId,
+    required String name,
+    required String surname,
+    required String dateOfBirth,
+    required String gender,
+    required String nationality,
+    required String idNumber,
+    required String contactNumber,
+    required String physicalAddress,
+    required String race,
+  }) async {
+    try {
+      print('Creating user profile with data:');
+      print('user_id: $userId');
+      print('name: $name');
+      print('surname: $surname');
+      print('date_of_birth: $dateOfBirth');
+      print('gender: $gender');
+      print('nationality: $nationality');
+      print('id_number: $idNumber');
+      print('contact_number: $contactNumber');
+      print('physical_address: $physicalAddress');
+      print('race: $race');
+      
+      final requestBody = {
+        'user_id': userId,
+        'name': name,
+        'surname': surname,
+        'date_of_birth': dateOfBirth,
+        'gender': gender,
+        'nationality': nationality,
+        'id_number': idNumber,
+        'contact_number': contactNumber,
+        'physical_address': physicalAddress,
+        'race': race,
+      };
+      
+      print('Request body: ${json.encode(requestBody)}');
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/user-profiles/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        return {'success': true, 'data': data};
+      } else {
+        final error = json.decode(response.body);
+        return {'success': false, 'message': error['detail'] ?? 'Failed to create user profile'};
+      }
+    } catch (e) {
+      print('Error creating user profile: $e');
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 

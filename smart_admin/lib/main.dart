@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:smart_admin/screens/login_screen.dart';
-import 'package:smart_admin/screens/dashboard_screen.dart';
-import 'package:smart_admin/screens/registration_screen.dart';
-import 'package:smart_admin/screens/instructor_management_screen.dart';
 import 'package:smart_admin/utils/app_theme.dart';
-import 'package:smart_admin/services/auth_service.dart';
 import 'package:smart_admin/services/navigation_service.dart';
+import 'package:smart_admin/services/session_service.dart';
 
 void main() {
   runApp(const SmartApp());
@@ -16,13 +14,16 @@ class SmartApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SMART - System for Motorists Automated Road Testing',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      initialRoute: '/login',
-      onGenerateRoute: NavigationService.generateRoute,
-      home: const LoginScreen(),
+    return ChangeNotifierProvider(
+      create: (context) => SessionService(),
+      child: MaterialApp(
+        title: 'SMART - System for Motorists Automated Road Testing',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        initialRoute: '/login',
+        onGenerateRoute: NavigationService.generateRoute,
+        home: const LoginScreen(),
+      ),
     );
   }
 }

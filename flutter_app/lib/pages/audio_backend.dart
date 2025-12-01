@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -6,8 +6,8 @@ import 'dart:io';
 import 'dart:async';
 
 class AudioBackend extends ChangeNotifier {
-  // Only initialize on Android
-  final AudioRecorder? _audioRecorder = Platform.isAndroid ? AudioRecorder() : null;
+  // Only initialize on Android (not web)
+  final AudioRecorder? _audioRecorder = (!kIsWeb && Platform.isAndroid) ? AudioRecorder() : null;
   bool _isRecording = false;
   String? _currentRecordingPath;
   String? _currentLearnerId;
@@ -18,10 +18,17 @@ class AudioBackend extends ChangeNotifier {
   String? get currentRecordingPath => _currentRecordingPath;
   String? get currentLearnerId => _currentLearnerId;
   Duration get recordingDuration => _recordingDuration;
+  
+  // Format duration as MM:SS
+  String get formattedDuration {
+    int minutes = _recordingDuration.inMinutes;
+    int seconds = _recordingDuration.inSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
 
   // Request permissions (Android only)
   Future<bool> requestPermissions() async {
-    if (!Platform.isAndroid) return false;
+    if (kIsWeb || !Platform.isAndroid) return false;
     Map<Permission, PermissionStatus> statuses = await [
       Permission.microphone,
       Permission.storage,
@@ -40,7 +47,7 @@ class AudioBackend extends ChangeNotifier {
 
   // Get Downloads or external storage directory
   Future<Directory?> _getSaveDirectory() async {
-    if (!Platform.isAndroid) return null;
+    if (kIsWeb || !Platform.isAndroid) return null;
     Directory? downloadsDir = Directory('/storage/emulated/0/Download');
     if (await downloadsDir.exists()) {
       return downloadsDir;
@@ -51,7 +58,7 @@ class AudioBackend extends ChangeNotifier {
 
   // Start recording (Android only)
   Future<bool> startRecording(String learnerId) async {
-    if (!Platform.isAndroid) return false;
+    if (kIsWeb || !Platform.isAndroid || _audioRecorder == null) return false;
     try {
       // Request permissions first
       bool permissionsGranted = await requestPermissions();
@@ -69,11 +76,11 @@ class AudioBackend extends ChangeNotifier {
 
       // Create filename with learner ID and timestamp
       String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      String filename = 'SMART_${learnerId}_${timestamp}.m4a';
+      String filename = 'SMART_${learnerId}_$timestamp.m4a';
       String filePath = '${saveDir.path}/$filename';
 
       // Start recording
-      await _audioRecorder!.start(
+      await _audioRecorder.start(
         RecordConfig(
           encoder: AudioEncoder.aacLc,
           bitRate: 128000,
@@ -104,55 +111,65 @@ class AudioBackend extends ChangeNotifier {
 
   // Stop recording (Android only)
   Future<String?> stopRecording() async {
-    if (!Platform.isAndroid) return null;
+    if (kIsWeb || !Platform.isAndroid || _audioRecorder == null) return null;
     try {
-      if (!_isRecording) {
-        return null;
-      }
-
-      // Stop the recording
-      String? path = await _audioRecorder!.stop();
-      
-      // Stop the timer
+      String? path = await _audioRecorder.stop();
+      _isRecording = false;
       _recordingTimer?.cancel();
       _recordingTimer = null;
-
-      _isRecording = false;
-      String? savedPath = _currentRecordingPath;
-      
-      // Clear current recording info
-      _currentRecordingPath = null;
-      _currentLearnerId = null;
-      _recordingDuration = Duration.zero;
-
       notifyListeners();
       debugPrint('Stopped recording: $path');
-      return savedPath;
+      return path;
     } catch (e) {
       debugPrint('Error stopping recording: $e');
       return null;
     }
   }
 
-  // Check if currently recording
-  bool get isCurrentlyRecording => _isRecording;
-
-  // Get formatted duration string
-  String get formattedDuration {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    String hours = twoDigits(_recordingDuration.inHours);
-    String minutes = twoDigits(_recordingDuration.inMinutes.remainder(60));
-    String seconds = twoDigits(_recordingDuration.inSeconds.remainder(60));
-    return "$hours:$minutes:$seconds";
+  // Pause recording (Android only)
+  Future<void> pauseRecording() async {
+    if (kIsWeb || !Platform.isAndroid || _audioRecorder == null) return;
+    try {
+      await _audioRecorder.pause();
+      _recordingTimer?.cancel();
+      notifyListeners();
+      debugPrint('Paused recording');
+    } catch (e) {
+      debugPrint('Error pausing recording: $e');
+    }
   }
 
-  // Dispose resources
+  // Resume recording (Android only)
+  Future<void> resumeRecording() async {
+    if (kIsWeb || !Platform.isAndroid || _audioRecorder == null) return;
+    try {
+      await _audioRecorder.resume();
+      // Restart timer
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        _recordingDuration += const Duration(seconds: 1);
+        notifyListeners();
+      });
+      notifyListeners();
+      debugPrint('Resumed recording');
+    } catch (e) {
+      debugPrint('Error resuming recording: $e');
+    }
+  }
+
+  // Check if recording is supported
+  bool get isRecordingSupported => !kIsWeb && Platform.isAndroid && _audioRecorder != null;
+
+  // Get recording state
+  bool get isPaused {
+    if (_audioRecorder == null) return false;
+    return false; // isPaused() is async, so we'll return false for now
+  }
+
+  // Dispose
   @override
   void dispose() {
     _recordingTimer?.cancel();
-    if (Platform.isAndroid) {
-      _audioRecorder?.dispose();
-    }
+    _audioRecorder?.dispose();
     super.dispose();
   }
 } 
