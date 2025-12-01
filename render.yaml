@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: smart-license-api
+    env: python
+    plan: free
+    rootDir: FastApi
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # IMPORTANT: Replace with your Supabase connection string
+      # Get it from: Supabase Dashboard → Settings → Database → Connection string (Connection pooling)
+      # Make sure to URL-encode special characters in password (@ → %40, # → %23, etc.)
+      - key: DATABASE_URL
+        value: postgresql://postgres.zivpoauevhefeeugdolq:0000@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
