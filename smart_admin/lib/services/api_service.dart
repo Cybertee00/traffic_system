@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:8000'; // Local API URL
+  // Use centralized API config
+  static String get baseUrl => ApiConfig.baseUrl;
   
   // Authentication
   static Future<Map<String, dynamic>> login(String username, String password) async {
