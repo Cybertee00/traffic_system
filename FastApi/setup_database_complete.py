@@ -84,7 +84,7 @@ def generate_phone_number():
     area_codes = ["082", "083", "084", "072", "073", "074", "081", "061"]
     return f"{random.choice(area_codes)}{random.randint(1000000, 9999999)}"
 
-def init_database_tables(db):
+def init_database_tables(engine, db):
     """Initialize database tables and default data"""
     print("\n" + "=" * 60)
     print("📊 STEP 1: Initializing Database Tables")
@@ -93,7 +93,7 @@ def init_database_tables(db):
     try:
         # Create all tables
         print("Creating database tables...")
-        Base.metadata.create_all(bind=db.bind)
+        Base.metadata.create_all(bind=engine)
         print("✅ Database tables created successfully!")
         
         # Insert default stations if they don't exist
@@ -359,25 +359,41 @@ def create_learners(db, instructor_id):
     print("=" * 60)
     
     try:
-        # Calculate date range
-        tomorrow = date.today() + timedelta(days=1)
-        end_date = date(2025, 2, 28)  # End of February
+        # Calculate date range - always use 2025 dates
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
         
-        if tomorrow > end_date:
-            print(f"⚠️  Tomorrow ({tomorrow}) is after February 28, 2025. No learners will be created.")
+        # If we're past Feb 2025, use next year's dates
+        if today.year > 2025 or (today.year == 2025 and today.month > 2):
+            # Use next year's February
+            end_date = date(today.year + 1, 2, 28)
+            start_date = date(today.year + 1, 1, 28) if today.month > 2 else tomorrow
+        else:
+            # Use 2025 dates
+            if today.month == 12:  # December 2025
+                # Start from January 2026
+                start_date = date(2026, 1, 28)
+                end_date = date(2026, 2, 28)
+            else:
+                # Use 2025 dates
+                start_date = tomorrow if today.year == 2025 else date(2025, 1, 28)
+                end_date = date(2025, 2, 28)
+        
+        if start_date > end_date:
+            print(f"⚠️  Start date ({start_date}) is after end date ({end_date}). No learners will be created.")
             return 0
         
-        total_days = (end_date - tomorrow).days + 1
+        total_days = (end_date - start_date).days + 1
         total_learners = total_days * LEARNERS_PER_DAY
         
-        print(f"📅 Date range: {tomorrow} to {end_date}")
+        print(f"📅 Date range: {start_date} to {end_date}")
         print(f"📊 Total days: {total_days}")
         print(f"👥 Total learners to create: {total_learners}")
         print(f"👨‍🏫 Instructor ID: {instructor_id}")
         print("=" * 60)
         
         total_created = 0
-        current_date = tomorrow
+        current_date = start_date
         
         # Create learners for each day
         while current_date <= end_date:
@@ -423,17 +439,29 @@ def main():
     
     # Create engine and session
     try:
-        engine = create_engine(DATABASE_URL)
+        print(f"\n🔌 Connecting to database...")
+        if not DATABASE_URL:
+            print("❌ DATABASE_URL not set! Please set it as environment variable or in config.env")
+            sys.exit(1)
+        
+        # Show masked connection string
+        masked_url = DATABASE_URL.split('@')[0].split(':')[-1] + '@' + DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else DATABASE_URL[:50]
+        print(f"📡 Connecting to: {masked_url}...")
+        
+        engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args={"connect_timeout": 10})
         SessionLocal = sessionmaker(bind=engine)
         db = SessionLocal()
+        print("✅ Connected successfully!")
     except Exception as e:
         print(f"❌ Failed to connect to database: {e}")
-        print(f"   DATABASE_URL: {DATABASE_URL[:50]}...")
+        print(f"   DATABASE_URL: {DATABASE_URL[:80] if DATABASE_URL else 'NOT SET'}...")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
     
     try:
         # Step 1: Initialize database
-        if not init_database_tables(db):
+        if not init_database_tables(engine, db):
             print("❌ Database initialization failed. Exiting.")
             return
         
