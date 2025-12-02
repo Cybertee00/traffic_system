@@ -218,7 +218,16 @@ def read_root():
 def login(req: LoginRequest, db: DBSession = Depends(get_db)):
     try:
         user = db.query(User).filter(User.username == req.username).first()
-        if not user or not verify_password(req.password, user.password):
+        if not user:
+            print(f"Login failed: User '{req.username}' not found")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # Debug password verification
+        password_valid = verify_password(req.password, user.password)
+        print(f"Login attempt: username={req.username}, password_valid={password_valid}, user_id={user.id}")
+        
+        if not password_valid:
+            print(f"Login failed: Password verification failed for user '{req.username}'")
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if str(user.role) not in ["instructor", "admin", "super_admin"]:
