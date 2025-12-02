@@ -196,14 +196,18 @@ def get_db():
         db.close()
 
 def verify_password(plain_password, hashed_password):
-    # Try bcrypt first, then fall back to simple hash for testing
+    """Verify password using bcrypt"""
     try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except:
-        # Fallback to simple hash verification for testing
-        import hashlib
-        simple_hash = hashlib.sha256(plain_password.encode()).hexdigest()
-        return simple_hash == hashed_password
+        # Try bcrypt verification
+        result = pwd_context.verify(plain_password, hashed_password)
+        return result
+    except Exception as e:
+        # Log the error for debugging
+        print(f"Password verification error: {e}")
+        print(f"Password hash type: {type(hashed_password)}")
+        print(f"Hash preview: {str(hashed_password)[:50] if hashed_password else 'None'}")
+        # Don't fall back to simple hash - this is a security issue
+        return False
 
 def get_password_hash(password):
     return pwd_context.hash(password)
