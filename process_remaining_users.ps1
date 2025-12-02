@@ -1,5 +1,5 @@
 # Process remaining existing users (IDs 19-115, skipping 18)
-$baseUrl = "https://smart-license-api.onrender.com"
+$baseUrl = "https://smart-license-api-9otw.onrender.com"
 
 Write-Host "Processing remaining existing users (IDs 19-115)..." -ForegroundColor Green
 Write-Host "Total users to process: 97" -ForegroundColor Yellow

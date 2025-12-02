@@ -1,5 +1,5 @@
 # Create test bookings for 93 users across 20 days
-$baseUrl = "https://smart-license-api.onrender.com"
+$baseUrl = "https://smart-license-api-9otw.onrender.com"
 
 Write-Host "Creating test bookings for 93 users across 20 days..." -ForegroundColor Green
 

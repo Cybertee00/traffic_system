@@ -11,7 +11,7 @@ import sys
 from typing import Optional
 
 # Configuration
-RENDER_API_URL = "https://smart-license-api.onrender.com"
+RENDER_API_URL = "https://smart-license-api-9otw.onrender.com"
 PING_INTERVAL = 600  # 10 minutes in seconds
 TIMEOUT = 30  # Request timeout in seconds
 

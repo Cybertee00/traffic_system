@@ -2,7 +2,7 @@
 <network-security-config>
     <!-- Allow HTTPS to Render server (default) -->
     <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">smart-license-api.onrender.com</domain>
+        <domain includeSubdomains="true">smart-license-api-9otw.onrender.com</domain>
         <domain includeSubdomains="true">onrender.com</domain>
         <trust-anchors>
             <certificates src="system"/>
